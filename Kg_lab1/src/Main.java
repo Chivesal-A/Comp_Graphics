@@ -43,13 +43,13 @@ public class Main extends JFrame {
     // Флаг чтобы избежать циклических обновлений при синхронизации полей
     private boolean updating = false;
 
-    // Формат для вывода дробных значений
+    // Формат для вывода дробных значений (используется только для внутренних вычислений)
     private final DecimalFormat df = new DecimalFormat("0.##");
 
     public Main() {
-        super("Лабораторная работа 1 — Цветовые модели: CMYK / RGB / HSV");
+        super("Лабораторная работа 1 — Цветовые модели: CMYK / RGB / HSV (без JColorChooser)");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 600);
+        setSize(1000, 640);
         setLocationRelativeTo(null);
         initUI();
     }
@@ -67,11 +67,11 @@ public class Main extends JFrame {
         left.add(Box.createVerticalStrut(8));
         left.add(createHSVPanel());
         left.add(Box.createVerticalStrut(8));
-        left.add(createPalettePanel());
+        left.add(createSwatchesPanel()); // заменили палитру на свои swatches
 
         getContentPane().add(left, BorderLayout.CENTER);
 
-        preview.setPreferredSize(new Dimension(300, 300));
+        preview.setPreferredSize(new Dimension(320, 320));
         preview.setBorder(BorderFactory.createTitledBorder("Preview"));
         getContentPane().add(preview, BorderLayout.EAST);
 
@@ -101,9 +101,9 @@ public class Main extends JFrame {
         tfB.addActionListener(rgbListener);
 
         // Обработчики потери фокуса (ввод через клавиатуру)
-        addFocusParse(tfR, () -> rgbTextChanged());
-        addFocusParse(tfG, () -> rgbTextChanged());
-        addFocusParse(tfB, () -> rgbTextChanged());
+        addFocusParse(tfR, this::rgbTextChanged);
+        addFocusParse(tfG, this::rgbTextChanged);
+        addFocusParse(tfB, this::rgbTextChanged);
 
         return p;
     }
@@ -133,10 +133,10 @@ public class Main extends JFrame {
         tfY.addActionListener(cmykListener);
         tfK.addActionListener(cmykListener);
 
-        addFocusParse(tfC, () -> cmykTextChanged());
-        addFocusParse(tfM, () -> cmykTextChanged());
-        addFocusParse(tfY, () -> cmykTextChanged());
-        addFocusParse(tfK, () -> cmykTextChanged());
+        addFocusParse(tfC, this::cmykTextChanged);
+        addFocusParse(tfM, this::cmykTextChanged);
+        addFocusParse(tfY, this::cmykTextChanged);
+        addFocusParse(tfK, this::cmykTextChanged);
 
         return p;
     }
@@ -163,50 +163,78 @@ public class Main extends JFrame {
         tfS.addActionListener(hsvListener);
         tfV.addActionListener(hsvListener);
 
-        addFocusParse(tfH, () -> hsvTextChanged());
-        addFocusParse(tfS, () -> hsvTextChanged());
-        addFocusParse(tfV, () -> hsvTextChanged());
+        addFocusParse(tfH, this::hsvTextChanged);
+        addFocusParse(tfS, this::hsvTextChanged);
+        addFocusParse(tfV, this::hsvTextChanged);
 
         return p;
     }
 
-    // Панель с кнопкой палитры (JColorChooser) — кастомный диалог,
-    // в котором удаляем панели с HSL/HLS (если они есть), оставляя Swatches + RGB + HSB(=HSV)
-    private JPanel createPalettePanel() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton btnPalette = new JButton("Выбрать цвет (палитра)");
-        btnPalette.addActionListener(e -> {
-            // Создаём JColorChooser с текущим цветом
-            final JColorChooser chooser = new JColorChooser(preview.getBackground());
-            AbstractColorChooserPanel[] panels = chooser.getChooserPanels();
-            java.util.List<AbstractColorChooserPanel> keep = new java.util.ArrayList<>();
-            for (AbstractColorChooserPanel pch : panels) {
-                String name = pch.getDisplayName().toLowerCase();
-                if (name.contains("swatches") || name.contains("rgb") || name.contains("hsb") || name.contains("hsv") ) {
-                    keep.add(pch);
-                }
-            }
-            for (AbstractColorChooserPanel pch : panels) {
-                String name = pch.getDisplayName().toLowerCase();
-                if (name.contains("swatches") || name.contains("rgb") || name.contains("cmyk") || name.contains("hsb") || name.contains("hsv") ) {
-                    keep.add(pch);
-                }
-            }
+    // Новая панель: набор заранее заданных swatches (кнопки/квадраты цветов)
+    private JPanel createSwatchesPanel() {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBorder(BorderFactory.createTitledBorder("Swatches (предустановленные цвета)"));
 
-            chooser.setPreviewPanel(new JPanel());
+        // Список цветов — можете изменить/добавить свои
+        Color[] colors = new Color[]{
+                new Color(0, 0, 0),       // черный
+                new Color(255, 255, 255), // белый
+                new Color(255, 0, 0),     // красный
+                new Color(0, 255, 0),     // зеленый
+                new Color(0, 0, 255),     // синий
+                new Color(255, 255, 0),   // желтый
+                new Color(255, 0, 255),   // пурпурный
+                new Color(0, 255, 255),   // циан
+                new Color(128, 128, 128), // серый
+                new Color(128, 0, 0),     // темно-красный
+                new Color(0, 128, 0),     // темно-зеленый
+                new Color(0, 0, 128),     // темно-синий
+                new Color(255, 165, 0),   // оранжевый
+                new Color(128, 0, 128),   // фиолетовый
+                new Color(255, 192, 203), // розовый
+                new Color(210, 180, 140)  // tan
+        };
 
-            ActionListener okListener = new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    Color c = chooser.getColor();
-                    if (c != null) setColorFromRGB(c.getRed(), c.getGreen(), c.getBlue());
+        // Сетка swatches 4x4
+        JPanel grid = new JPanel(new GridLayout(4, 4, 6, 6));
+        for (Color c : colors) {
+            JButton btn = new JButton();
+            btn.setBackground(c);
+            btn.setOpaque(true);
+            btn.setBorderPainted(false);
+            btn.setPreferredSize(new Dimension(36, 36));
+            btn.setToolTipText("R=" + c.getRed() + " G=" + c.getGreen() + " B=" + c.getBlue());
+            btn.addActionListener(e -> setColorFromRGB(c.getRed(), c.getGreen(), c.getBlue()));
+            grid.add(btn);
+        }
+
+        p.add(grid, BorderLayout.CENTER);
+
+        // Дополнительно: поле с текстом и кнопкой «Применить» для ввода hex-кода (опционально)
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JTextField hexField = new JTextField("#RRGGBB", 8);
+        JButton applyHex = new JButton("Применить HEX");
+        applyHex.addActionListener(e -> {
+            String s = hexField.getText().trim();
+            if (s.startsWith("#")) s = s.substring(1);
+            if (s.length() == 6) {
+                try {
+                    int r = Integer.parseInt(s.substring(0, 2), 16);
+                    int g = Integer.parseInt(s.substring(2, 4), 16);
+                    int b = Integer.parseInt(s.substring(4, 6), 16);
+                    setColorFromRGB(r, g, b);
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Неверный HEX", "Ошибка", JOptionPane.ERROR_MESSAGE);
                 }
-            };
-            JDialog dialog = JColorChooser.createDialog(this, "Выбор цвета", true, chooser, okListener, null);
-            dialog.setVisible(true);
+            } else {
+                JOptionPane.showMessageDialog(this, "HEX должен быть в формате RRGGBB", "Ошибка", JOptionPane.ERROR_MESSAGE);
+            }
         });
+        bottom.add(hexField);
+        bottom.add(applyHex);
 
-        p.add(btnPalette);
+        p.add(bottom, BorderLayout.SOUTH);
+
         return p;
     }
 
@@ -249,7 +277,7 @@ public class Main extends JFrame {
             preview.setBackground(new Color(r, g, b));
 
             // Вычисляем CMYK из RGB
-            double[] cmyk = rgbToCmyk(r, g, b); // возвращает [C,M,Y,K] в процентах 0..100
+            double[] cmyk = rgbToCmyk(r, g, b);
             sliderC.setValue((int) Math.round(cmyk[0]));
             sliderM.setValue((int) Math.round(cmyk[1]));
             sliderY.setValue((int) Math.round(cmyk[2]));
@@ -281,7 +309,7 @@ public class Main extends JFrame {
             int b = parseIntClamped(tfB.getText(), 0, 255);
             setColorFromRGB(r, g, b);
         } catch (NumberFormatException ex) {
-            // Игнорируем — поле вернётся в корректное состояние при следующем действии
+            // Игнор
         }
     }
 
@@ -303,7 +331,7 @@ public class Main extends JFrame {
             tfM.setText(Integer.toString((int) Math.round(m)));
             tfY.setText(Integer.toString((int) Math.round(y)));
             tfK.setText(Integer.toString((int) Math.round(k)));
-            // Конвертируем в RGB
+
             int[] rgb = cmykToRgb(c, m, y, k);
             setColorFromRGB(rgb[0], rgb[1], rgb[2]);
 
@@ -329,7 +357,7 @@ public class Main extends JFrame {
             tfH.setText(Integer.toString((int) Math.round(h)));
             tfS.setText(Integer.toString((int) Math.round(s)));
             tfV.setText(Integer.toString((int) Math.round(v)));
-            // Конвертируем в RGB
+
             int[] rgb = hsvToRgb(h, s, v);
             setColorFromRGB(rgb[0], rgb[1], rgb[2]);
         } catch (NumberFormatException ex) {

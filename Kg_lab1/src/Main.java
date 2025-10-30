@@ -170,7 +170,7 @@ public class Main extends JFrame {
         return p;
     }
 
-    // Панель с кнопкой палитры (JColorChooser) — теперь создаём кастомный диалог,
+    // Панель с кнопкой палитры (JColorChooser) — кастомный диалог,
     // в котором удаляем панели с HSL/HLS (если они есть), оставляя Swatches + RGB + HSB(=HSV)
     private JPanel createPalettePanel() {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -254,19 +254,19 @@ public class Main extends JFrame {
             sliderM.setValue((int) Math.round(cmyk[1]));
             sliderY.setValue((int) Math.round(cmyk[2]));
             sliderK.setValue((int) Math.round(cmyk[3]));
-            tfC.setText(df.format(cmyk[0]));
-            tfM.setText(df.format(cmyk[1]));
-            tfY.setText(df.format(cmyk[2]));
-            tfK.setText(df.format(cmyk[3]));
+            tfC.setText(Integer.toString((int) Math.round(cmyk[0])));
+            tfM.setText(Integer.toString((int) Math.round(cmyk[1])));
+            tfY.setText(Integer.toString((int) Math.round(cmyk[2])));
+            tfK.setText(Integer.toString((int) Math.round(cmyk[3])));
 
             // Вычисляем HSV из RGB
             double[] hsv = rgbToHsv(r, g, b); // H:0..360, S,V:0..100
             sliderH.setValue((int) Math.round(hsv[0]));
             sliderS.setValue((int) Math.round(hsv[1]));
             sliderV.setValue((int) Math.round(hsv[2]));
-            tfH.setText(df.format(hsv[0]));
-            tfS.setText(df.format(hsv[1]));
-            tfV.setText(df.format(hsv[2]));
+            tfH.setText(Integer.toString((int) Math.round(hsv[0])));
+            tfS.setText(Integer.toString((int) Math.round(hsv[1])));
+            tfV.setText(Integer.toString((int) Math.round(hsv[2])));
         } finally {
             updating = false;
         }
@@ -299,11 +299,10 @@ public class Main extends JFrame {
             sliderM.setValue((int) Math.round(m));
             sliderY.setValue((int) Math.round(y));
             sliderK.setValue((int) Math.round(k));
-            tfC.setText(df.format(c));
-            tfM.setText(df.format(m));
-            tfY.setText(df.format(y));
-            tfK.setText(df.format(k));
-
+            tfC.setText(Integer.toString((int) Math.round(c)));
+            tfM.setText(Integer.toString((int) Math.round(m)));
+            tfY.setText(Integer.toString((int) Math.round(y)));
+            tfK.setText(Integer.toString((int) Math.round(k)));
             // Конвертируем в RGB
             int[] rgb = cmykToRgb(c, m, y, k);
             setColorFromRGB(rgb[0], rgb[1], rgb[2]);
@@ -327,10 +326,9 @@ public class Main extends JFrame {
             sliderH.setValue((int) Math.round(h));
             sliderS.setValue((int) Math.round(s));
             sliderV.setValue((int) Math.round(v));
-            tfH.setText(df.format(h));
-            tfS.setText(df.format(s));
-            tfV.setText(df.format(v));
-
+            tfH.setText(Integer.toString((int) Math.round(h)));
+            tfS.setText(Integer.toString((int) Math.round(s)));
+            tfV.setText(Integer.toString((int) Math.round(v)));
             // Конвертируем в RGB
             int[] rgb = hsvToRgb(h, s, v);
             setColorFromRGB(rgb[0], rgb[1], rgb[2]);
@@ -490,10 +488,10 @@ public class Main extends JFrame {
             double m = sliderM.getValue();
             double y = sliderY.getValue();
             double k = sliderK.getValue();
-            tfC.setText(df.format(c));
-            tfM.setText(df.format(m));
-            tfY.setText(df.format(y));
-            tfK.setText(df.format(k));
+            tfC.setText(Integer.toString((int) Math.round(c)));
+            tfM.setText(Integer.toString((int) Math.round(m)));
+            tfY.setText(Integer.toString((int) Math.round(y)));
+            tfK.setText(Integer.toString((int) Math.round(k)));
             int[] rgb = cmykToRgb(c, m, y, k);
             setColorFromRGB(rgb[0], rgb[1], rgb[2]);
         }
@@ -512,9 +510,9 @@ public class Main extends JFrame {
             double h = sliderH.getValue();
             double s = sliderS.getValue();
             double v = sliderV.getValue();
-            tfH.setText(df.format(h));
-            tfS.setText(df.format(s));
-            tfV.setText(df.format(v));
+            tfH.setText(Integer.toString((int) Math.round(h)));
+            tfS.setText(Integer.toString((int) Math.round(s)));
+            tfV.setText(Integer.toString((int) Math.round(v)));
             int[] rgb = hsvToRgb(h, s, v);
             setColorFromRGB(rgb[0], rgb[1], rgb[2]);
         }

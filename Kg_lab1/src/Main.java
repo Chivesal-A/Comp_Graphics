@@ -175,7 +175,6 @@ public class Main extends JFrame {
         JPanel p = new JPanel(new BorderLayout());
         p.setBorder(BorderFactory.createTitledBorder("Swatches (предустановленные цвета)"));
 
-        // Список цветов — можете изменить/добавить свои
         Color[] colors = new Color[]{
                 new Color(0, 0, 0),       // черный
                 new Color(255, 255, 255), // белый
@@ -195,7 +194,6 @@ public class Main extends JFrame {
                 new Color(210, 180, 140)  // tan
         };
 
-        // Сетка swatches 4x4
         JPanel grid = new JPanel(new GridLayout(4, 4, 6, 6));
         for (Color c : colors) {
             JButton btn = new JButton();
@@ -210,7 +208,6 @@ public class Main extends JFrame {
 
         p.add(grid, BorderLayout.CENTER);
 
-        // Дополнительно: поле с текстом и кнопкой «Применить» для ввода hex-кода (опционально)
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JTextField hexField = new JTextField("#RRGGBB", 8);
         JButton applyHex = new JButton("Применить HEX");
@@ -252,7 +249,6 @@ public class Main extends JFrame {
         return row;
     }
 
-    // Добавление обработчика потери фокуса
     private void addFocusParse(JTextField tf, Runnable onChange) {
         tf.addFocusListener(new FocusAdapter() {
             @Override
@@ -367,7 +363,6 @@ public class Main extends JFrame {
         }
     }
 
-    // Парсинг целых значений с ограничением
     private int parseIntClamped(String s, int min, int max) {
         int v = Integer.parseInt(s.trim());
         if (v < min) v = min;
@@ -375,7 +370,6 @@ public class Main extends JFrame {
         return v;
     }
 
-    // Парсинг дробных значений с ограничением
     private double parseDoubleClamped(String s, double min, double max) {
         double v = Double.parseDouble(s.trim());
         if (v < min) v = min;

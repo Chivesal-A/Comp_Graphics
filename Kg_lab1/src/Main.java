@@ -1,5 +1,4 @@
 import javax.swing.*;
-import javax.swing.colorchooser.AbstractColorChooserPanel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import java.awt.*;
@@ -20,14 +19,15 @@ public class Main extends JFrame {
     private final JTextField tfB = new JTextField("0", 4);
 
     // Поля для CMYK (0..100 %)
-    private final JSlider sliderC = new JSlider(0, 100, 100);
-    private final JSlider sliderM = new JSlider(0, 100, 100);
-    private final JSlider sliderY = new JSlider(0, 100, 100);
-    private final JSlider sliderK = new JSlider(0, 100, 0);
-    private final JTextField tfC = new JTextField("100", 4);
-    private final JTextField tfM = new JTextField("100", 4);
-    private final JTextField tfY = new JTextField("100", 4);
-    private final JTextField tfK = new JTextField("0", 4);
+    // ЗАМЕНА: C,M,Y по умолчанию 0, K по умолчанию 100 (чёрный)
+    private final JSlider sliderC = new JSlider(0, 100, 0);
+    private final JSlider sliderM = new JSlider(0, 100, 0);
+    private final JSlider sliderY = new JSlider(0, 100, 0);
+    private final JSlider sliderK = new JSlider(0, 100, 100);
+    private final JTextField tfC = new JTextField("0", 4);
+    private final JTextField tfM = new JTextField("0", 4);
+    private final JTextField tfY = new JTextField("0", 4);
+    private final JTextField tfK = new JTextField("100", 4);
 
     // Поля для HSV: H 0..360, S,V 0..100
     private final JSlider sliderH = new JSlider(0, 360, 0);
@@ -258,7 +258,7 @@ public class Main extends JFrame {
         });
     }
 
-    // Установка цвета по RGB и обновление всех представлений
+    // Установка цвета по RGB и обновление всех представлений (как было)
     private void setColorFromRGB(int r, int g, int b) {
         if (updating) return;
         updating = true;
@@ -296,6 +296,45 @@ public class Main extends JFrame {
         }
     }
 
+    // НОВЫЙ: установка цвета по CMYK без повтора CMYK->RGB->CMYK
+    private void setColorFromCMYK(double c, double m, double y, double k) {
+        if (updating) return;
+        updating = true;
+        try {
+            // Обновим CMYK-ползунки и текстовые поля — пользователь их как раз поменял
+            sliderC.setValue((int) Math.round(c));
+            sliderM.setValue((int) Math.round(m));
+            sliderY.setValue((int) Math.round(y));
+            sliderK.setValue((int) Math.round(k));
+            tfC.setText(Integer.toString((int) Math.round(c)));
+            tfM.setText(Integer.toString((int) Math.round(m)));
+            tfY.setText(Integer.toString((int) Math.round(y)));
+            tfK.setText(Integer.toString((int) Math.round(k)));
+
+            // Получим RGB из CMYK и обновим RGB-поля и preview
+            int[] rgb = cmykToRgb(c, m, y, k);
+            sliderR.setValue(rgb[0]);
+            sliderG.setValue(rgb[1]);
+            sliderB.setValue(rgb[2]);
+            tfR.setText(String.valueOf(rgb[0]));
+            tfG.setText(String.valueOf(rgb[1]));
+            tfB.setText(String.valueOf(rgb[2]));
+
+            preview.setBackground(new Color(rgb[0], rgb[1], rgb[2]));
+
+            // Обновим HSV (для согласованности интерфейса)
+            double[] hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+            sliderH.setValue((int) Math.round(hsv[0]));
+            sliderS.setValue((int) Math.round(hsv[1]));
+            sliderV.setValue((int) Math.round(hsv[2]));
+            tfH.setText(Integer.toString((int) Math.round(hsv[0])));
+            tfS.setText(Integer.toString((int) Math.round(hsv[1])));
+            tfV.setText(Integer.toString((int) Math.round(hsv[2])));
+        } finally {
+            updating = false;
+        }
+    }
+
     // Обработчики изменений: RGB
     private void rgbTextChanged() {
         if (updating) return;
@@ -312,29 +351,17 @@ public class Main extends JFrame {
     // Обработчики изменений: CMYK
     private void cmykTextChanged() {
         if (updating) return;
-        updating = true;
         try {
             double c = parseDoubleClamped(tfC.getText(), 0, 100);
             double m = parseDoubleClamped(tfM.getText(), 0, 100);
             double y = parseDoubleClamped(tfY.getText(), 0, 100);
             double k = parseDoubleClamped(tfK.getText(), 0, 100);
 
-            sliderC.setValue((int) Math.round(c));
-            sliderM.setValue((int) Math.round(m));
-            sliderY.setValue((int) Math.round(y));
-            sliderK.setValue((int) Math.round(k));
-            tfC.setText(Integer.toString((int) Math.round(c)));
-            tfM.setText(Integer.toString((int) Math.round(m)));
-            tfY.setText(Integer.toString((int) Math.round(y)));
-            tfK.setText(Integer.toString((int) Math.round(k)));
-
-            int[] rgb = cmykToRgb(c, m, y, k);
-            setColorFromRGB(rgb[0], rgb[1], rgb[2]);
+            // Обновляем CMYK и соответствующий RGB/preview без повторного пересчёта CMYK
+            setColorFromCMYK(c, m, y, k);
 
         } catch (NumberFormatException ex) {
             // игнор
-        } finally {
-            updating = false;
         }
     }
 
@@ -505,7 +532,7 @@ public class Main extends JFrame {
     private class CMYKListener implements ChangeListener, ActionListener {
         @Override
         public void stateChanged(ChangeEvent e) {
-            // НЕ ставим updating здесь — setColorFromRGB сам управляет флагом.
+            // Читаем CMYK значения и применяем setColorFromCMYK (чтобы не делать CMYK->RGB->CMYK)
             double c = sliderC.getValue();
             double m = sliderM.getValue();
             double y = sliderY.getValue();
@@ -514,8 +541,7 @@ public class Main extends JFrame {
             tfM.setText(Integer.toString((int) Math.round(m)));
             tfY.setText(Integer.toString((int) Math.round(y)));
             tfK.setText(Integer.toString((int) Math.round(k)));
-            int[] rgb = cmykToRgb(c, m, y, k);
-            setColorFromRGB(rgb[0], rgb[1], rgb[2]);
+            setColorFromCMYK(c, m, y, k);
         }
 
         @Override

@@ -126,7 +126,10 @@ public class Main extends JFrame {
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File f = chooser.getSelectedFile();
             try {
-                srcImage = ImageIO.read(f);
+                BufferedImage read = ImageIO.read(f);
+                if (read == null) throw new IOException("Неподдерживаемый формат изображения");
+                // Приводим входное изображение к предсказуемому ARGB
+                srcImage = toARGB(read);
                 resultImage = deepCopy(srcImage);
                 updateImageLabel(resultImage);
                 status("Загружено: " + f.getName() + " (" + srcImage.getWidth() + "x" + srcImage.getHeight() + ")");
@@ -214,6 +217,16 @@ public class Main extends JFrame {
         return copy;
     }
 
+    // Приводит любое изображение к TYPE_INT_ARGB (чтобы getRGB и операции с каналами были предсказуемы)
+    private static BufferedImage toARGB(BufferedImage img) {
+        if (img.getType() == BufferedImage.TYPE_INT_ARGB) return img;
+        BufferedImage dst = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = dst.createGraphics();
+        g.drawImage(img, 0, 0, null);
+        g.dispose();
+        return dst;
+    }
+
     private static BufferedImage toGrayscale(BufferedImage src) {
         BufferedImage gray = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
         Graphics g = gray.getGraphics();
@@ -286,6 +299,7 @@ public class Main extends JFrame {
                         wsum += kval;
                     }
                 }
+                // wsum > 0, потому что центр окна всегда внутри изображения
                 int a = clamp((int) Math.round(sumA / wsum));
                 int rr = clamp((int) Math.round(sumR / wsum));
                 int gg = clamp((int) Math.round(sumG / wsum));
@@ -322,16 +336,19 @@ public class Main extends JFrame {
 
     // ========== Локальные пороги ==========
 
+    // Adaptive Mean: вычисляем локальную среднюю в окне и сравниваем
     private static BufferedImage adaptiveMeanThreshold(BufferedImage src, int k) {
+        // используем временно grayscale для вычислений
         BufferedImage gray = toGrayscale(src);
         int w = gray.getWidth(), h = gray.getHeight();
-        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_BINARY);
         int r = k / 2;
         int[] g = new int[w * h];
         gray.getRaster().getPixels(0, 0, w, h, g);
+
+        // Финальный результат — ARGB, чтобы избежать проблем с упаковкой битов
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         int[] outPixels = new int[w * h];
 
-        // для каждого пикселя считаем среднее в окне
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 int sum = 0;
@@ -344,20 +361,23 @@ public class Main extends JFrame {
                 }
                 int localMean = sum / Math.max(1, cnt);
                 int val = g[y * w + x];
-                outPixels[y * w + x] = (val <= localMean) ? 0 : 255;
+                int v = (val <= localMean) ? 0 : 255;
+                outPixels[y * w + x] = (0xFF << 24) | (v << 16) | (v << 8) | v;
             }
         }
-        out.getRaster().setPixels(0, 0, w, h, outPixels);
+        out.setRGB(0, 0, w, h, outPixels, 0, w);
         return out;
     }
 
+    // Sauvola threshold: локальный порог с учётом std
     private static BufferedImage sauvolaThreshold(BufferedImage src, int k, double ksau, double R) {
         BufferedImage gray = toGrayscale(src);
         int w = gray.getWidth(), h = gray.getHeight();
-        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_BINARY);
         int r = k / 2;
         int[] g = new int[w * h];
         gray.getRaster().getPixels(0, 0, w, h, g);
+
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         int[] outPixels = new int[w * h];
 
         for (int y = 0; y < h; y++) {
@@ -378,10 +398,11 @@ public class Main extends JFrame {
                 double std = var > 0 ? Math.sqrt(var) : 0;
                 double T = mean * (1 + ksau * (std / R - 1));
                 int val = g[y * w + x];
-                outPixels[y * w + x] = (val <= T) ? 0 : 255;
+                int v = (val <= T) ? 0 : 255;
+                outPixels[y * w + x] = (0xFF << 24) | (v << 16) | (v << 8) | v;
             }
         }
-        out.getRaster().setPixels(0, 0, w, h, outPixels);
+        out.setRGB(0, 0, w, h, outPixels, 0, w);
         return out;
     }
 }

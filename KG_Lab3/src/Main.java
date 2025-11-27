@@ -275,23 +275,40 @@ class DrawPanel extends JPanel {
         showPoints(pts, log, stepMode);
     }
 
-    private List<Point> stepAlgorithm(int x0,int y0,int x1,int y1, JTextArea log) {
+    private List<Point> stepAlgorithm(int x0, int y0, int x1, int y1, JTextArea log) {
         List<Point> res = new ArrayList<>();
-        int dx = x1 - x0; int dy = y1 - y0;
-        if (dx == 0) {
+        int dx = x1 - x0;
+        int dy = y1 - y0;
+
+        if (dx == 0 && dy != 0) {
             int step = dy > 0 ? 1 : -1;
-            for (int y = y0; y != y1 + step; y += step) res.add(new Point(x0,y));
+            for (int y = y0; y != y1 + step; y += step) res.add(new Point(x0, y));
             log.append("Пошаговый: вертикальная линия, x = " + x0 + "\n");
             return res;
         }
-        double m = (double) dy / dx;
-        log.append(String.format("Пошаговый: dx=%d, dy=%d, m=%.6f\n", dx, dy, m));
-        int step = dx > 0 ? 1 : -1;
-        for (int x = x0; x != x1 + step; x += step) {
-            double y = y0 + m * (x - x0);
+        if (dx == 0 && dy == 0) {
+            res.add(new Point(x0, y0));
+            log.append("Пошаговый: одна точка (" + x0 + "," + y0 + ")\n");
+            return res;
+        }
+
+        int steps = Math.max(Math.abs(dx), Math.abs(dy));
+        double sx = (double) dx / steps;
+        double sy = (double) dy / steps;
+        double x = x0;
+        double y = y0;
+
+        log.append(String.format("Пошаговый (fixed): dx=%d, dy=%d, steps=%d, sx=%.6f, sy=%.6f\n", dx, dy, steps, sx, sy));
+
+        for (int i = 0; i <= steps; i++) {
+            int xi = (int) Math.round(x);
             int yi = (int) Math.round(y);
-            res.add(new Point(x, yi));
-            if (res.size() <= 10) log.append(String.format("x=%d -> y≈%.4f -> y_окр=%d\n", x, y, yi));
+            if (res.isEmpty() || res.get(res.size() - 1).x != xi || res.get(res.size() - 1).y != yi) {
+                res.add(new Point(xi, yi));
+                if (res.size() <= 10) log.append(String.format("i=%d: x=%.4f y=%.4f -> (%d,%d)\n", i, x, y, xi, yi));
+            }
+            x += sx;
+            y += sy;
         }
         return res;
     }

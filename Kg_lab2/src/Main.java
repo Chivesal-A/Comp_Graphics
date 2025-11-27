@@ -128,7 +128,6 @@ public class Main extends JFrame {
             try {
                 BufferedImage read = ImageIO.read(f);
                 if (read == null) throw new IOException("Неподдерживаемый формат изображения");
-                // Приводим входное изображение к предсказуемому ARGB
                 srcImage = toARGB(read);
                 resultImage = deepCopy(srcImage);
                 updateImageLabel(resultImage);
@@ -170,12 +169,12 @@ public class Main extends JFrame {
         }
         String sel = (String) filterCombo.getSelectedItem();
         int k = ((Number) kernelSpinner.getValue()).intValue();
-        if (k % 2 == 0) k++;
+        if (k % 2 == 0) k++; // гарантируем нечётность
         double sigma = ((Number) sigmaSpinner.getValue()).doubleValue();
 
         switch (sel) {
             case "Mean (Box) фильтр":
-                resultImage = meanFilter(srcImage, k);
+                resultImage = meanFilterIntegral(srcImage, k);
                 status("Применён Mean фильтр, ядро=" + k);
                 break;
             case "Gaussian фильтр":
@@ -183,11 +182,11 @@ public class Main extends JFrame {
                 status(String.format("Применён Gaussian фильтр, ядро=%d, σ=%.2f", k, sigma));
                 break;
             case "Adaptive Mean (локальный)":
-                resultImage = adaptiveMeanThreshold(srcImage, k);
+                resultImage = adaptiveMeanThresholdIntegral(srcImage, k);
                 status("Применена локальная пороговая обработка (Adaptive Mean), окно=" + k);
                 break;
             case "Sauvola (локальный)":
-                resultImage = sauvolaThreshold(srcImage, k, 0.34, 128); // k=0.34 рекомендовано Sauvola
+                resultImage = sauvolaThresholdIntegral(srcImage, k, 0.34, 128);
                 status("Применена локальная пороговая обработка (Sauvola), окно=" + k);
                 break;
             default:
@@ -207,8 +206,7 @@ public class Main extends JFrame {
         imageLabel.revalidate();
     }
 
-    // ========== Утилиты изображений ==========
-
+    // Утилиты изображений
     private static BufferedImage deepCopy(BufferedImage bi) {
         BufferedImage copy = new BufferedImage(bi.getWidth(), bi.getHeight(), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = copy.createGraphics();
@@ -217,7 +215,7 @@ public class Main extends JFrame {
         return copy;
     }
 
-    // Приводит любое изображение к TYPE_INT_ARGB (чтобы getRGB и операции с каналами были предсказуемы)
+    // Приводит любое изображение к TYPE_INT_ARGB
     private static BufferedImage toARGB(BufferedImage img) {
         if (img.getType() == BufferedImage.TYPE_INT_ARGB) return img;
         BufferedImage dst = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
@@ -235,43 +233,66 @@ public class Main extends JFrame {
         return gray;
     }
 
-    // ========== Фильтры ==========
-
-    // Mean (box) filter: усреднение в окне k x k
-    private static BufferedImage meanFilter(BufferedImage src, int k) {
+    // Фильтры
+    private static BufferedImage meanFilterIntegral(BufferedImage src, int k) {
         int w = src.getWidth(), h = src.getHeight();
+        int[] in = src.getRGB(0, 0, w, h, null, 0, w);
+
+        // Создаём интегральные таблицы для каналов (размер (w+1)*(h+1))
+        long[][] sumA = new long[h + 1][w + 1];
+        long[][] sumR = new long[h + 1][w + 1];
+        long[][] sumG = new long[h + 1][w + 1];
+        long[][] sumB = new long[h + 1][w + 1];
+
+        for (int y = 1; y <= h; y++) {
+            long ra = 0, rr = 0, rg = 0, rb = 0;
+            for (int x = 1; x <= w; x++) {
+                int rgb = in[(y - 1) * w + (x - 1)];
+                ra += (rgb >>> 24) & 0xFF;
+                rr += (rgb >>> 16) & 0xFF;
+                rg += (rgb >>> 8) & 0xFF;
+                rb += (rgb) & 0xFF;
+                sumA[y][x] = sumA[y - 1][x] + ra;
+                sumR[y][x] = sumR[y - 1][x] + rr;
+                sumG[y][x] = sumG[y - 1][x] + rg;
+                sumB[y][x] = sumB[y - 1][x] + rb;
+            }
+        }
+
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         int r = k / 2;
-        int[] pixels = src.getRGB(0, 0, w, h, null, 0, w);
-        int[] outPixels = new int[pixels.length];
+        int[] outPixels = new int[w * h];
 
-        // свёртка с равномерным ядром (O(w*h*k^2))
         for (int y = 0; y < h; y++) {
+            int y1 = Math.max(0, y - r);
+            int y2 = Math.min(h - 1, y + r);
             for (int x = 0; x < w; x++) {
-                long sumA = 0, sumR = 0, sumG = 0, sumB = 0;
-                int cnt = 0;
-                for (int yy = Math.max(0, y - r); yy <= Math.min(h - 1, y + r); yy++) {
-                    for (int xx = Math.max(0, x - r); xx <= Math.min(w - 1, x + r); xx++) {
-                        int rgb = pixels[yy * w + xx];
-                        sumA += (rgb >> 24) & 0xFF;
-                        sumR += (rgb >> 16) & 0xFF;
-                        sumG += (rgb >> 8) & 0xFF;
-                        sumB += rgb & 0xFF;
-                        cnt++;
-                    }
-                }
-                int a = (int) (sumA / cnt);
-                int rr = (int) (sumR / cnt);
-                int gg = (int) (sumG / cnt);
-                int bb = (int) (sumB / cnt);
-                outPixels[y * w + x] = (clamp(a) << 24) | (clamp(rr) << 16) | (clamp(gg) << 8) | clamp(bb);
+                int x1 = Math.max(0, x - r);
+                int x2 = Math.min(w - 1, x + r);
+                // координаты в интегральной таблице с +1 смещением
+                int ix1 = x1;
+                int iy1 = y1;
+                int ix2 = x2 + 1;
+                int iy2 = y2 + 1;
+                int area = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+                long sum_a = sumA[iy2][ix2] - sumA[iy1][ix2] - sumA[iy2][ix1] + sumA[iy1][ix1];
+                long sum_r = sumR[iy2][ix2] - sumR[iy1][ix2] - sumR[iy2][ix1] + sumR[iy1][ix1];
+                long sum_g = sumG[iy2][ix2] - sumG[iy1][ix2] - sumG[iy2][ix1] + sumG[iy1][ix1];
+                long sum_b = sumB[iy2][ix2] - sumB[iy1][ix2] - sumB[iy2][ix1] + sumB[iy1][ix1];
+
+                int a = clamp((int) (sum_a / area));
+                int rrC = clamp((int) (sum_r / area));
+                int ggC = clamp((int) (sum_g / area));
+                int bbC = clamp((int) (sum_b / area));
+                outPixels[y * w + x] = (a << 24) | (rrC << 16) | (ggC << 8) | bbC;
             }
         }
         out.setRGB(0, 0, w, h, outPixels, 0, w);
         return out;
     }
 
-    // Gaussian filter: создаём ядро и сворачиваем
+    // Gaussian filter: создаём ядро и сворачиваем (двумерная свёртка)
     private static BufferedImage gaussianFilter(BufferedImage src, int k, double sigma) {
         int w = src.getWidth(), h = src.getHeight();
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
@@ -292,14 +313,13 @@ public class Main extends JFrame {
                         if (xx < 0 || xx >= w) continue;
                         double kval = kernel[(dy + r) * k + (dx + r)];
                         int rgb = inPixels[yy * w + xx];
-                        sumA += ((rgb >> 24) & 0xFF) * kval;
-                        sumR += ((rgb >> 16) & 0xFF) * kval;
-                        sumG += ((rgb >> 8) & 0xFF) * kval;
+                        sumA += ((rgb >>> 24) & 0xFF) * kval;
+                        sumR += ((rgb >>> 16) & 0xFF) * kval;
+                        sumG += ((rgb >>> 8) & 0xFF) * kval;
                         sumB += (rgb & 0xFF) * kval;
                         wsum += kval;
                     }
                 }
-                // wsum > 0, потому что центр окна всегда внутри изображения
                 int a = clamp((int) Math.round(sumA / wsum));
                 int rr = clamp((int) Math.round(sumR / wsum));
                 int gg = clamp((int) Math.round(sumG / wsum));
@@ -311,7 +331,6 @@ public class Main extends JFrame {
         return out;
     }
 
-    // Create 2D gaussian kernel flattened
     private static double[] makeGaussianKernel(int k, double sigma) {
         int r = k / 2;
         double[] kernel = new double[k * k];
@@ -334,32 +353,40 @@ public class Main extends JFrame {
         return v;
     }
 
-    // ========== Локальные пороги ==========
-
-    // Adaptive Mean: вычисляем локальную среднюю в окне и сравниваем
-    private static BufferedImage adaptiveMeanThreshold(BufferedImage src, int k) {
-        // используем временно grayscale для вычислений
+    // Локальные пороги (через интегралы)
+    private static BufferedImage adaptiveMeanThresholdIntegral(BufferedImage src, int k) {
         BufferedImage gray = toGrayscale(src);
         int w = gray.getWidth(), h = gray.getHeight();
-        int r = k / 2;
         int[] g = new int[w * h];
         gray.getRaster().getPixels(0, 0, w, h, g);
 
-        // Финальный результат — ARGB, чтобы избежать проблем с упаковкой битов
+        // интегральная таблица для яркости
+        long[][] sum = new long[h + 1][w + 1];
+        for (int y = 1; y <= h; y++) {
+            long rowSum = 0;
+            for (int x = 1; x <= w; x++) {
+                rowSum += g[(y - 1) * w + (x - 1)];
+                sum[y][x] = sum[y - 1][x] + rowSum;
+            }
+        }
+
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         int[] outPixels = new int[w * h];
+        int r = k / 2;
 
         for (int y = 0; y < h; y++) {
+            int y1 = Math.max(0, y - r);
+            int y2 = Math.min(h - 1, y + r);
             for (int x = 0; x < w; x++) {
-                int sum = 0;
-                int cnt = 0;
-                for (int yy = Math.max(0, y - r); yy <= Math.min(h - 1, y + r); yy++) {
-                    for (int xx = Math.max(0, x - r); xx <= Math.min(w - 1, x + r); xx++) {
-                        sum += g[yy * w + xx];
-                        cnt++;
-                    }
-                }
-                int localMean = sum / Math.max(1, cnt);
+                int x1 = Math.max(0, x - r);
+                int x2 = Math.min(w - 1, x + r);
+                int ix1 = x1;
+                int iy1 = y1;
+                int ix2 = x2 + 1;
+                int iy2 = y2 + 1;
+                int area = (x2 - x1 + 1) * (y2 - y1 + 1);
+                long s = sum[iy2][ix2] - sum[iy1][ix2] - sum[iy2][ix1] + sum[iy1][ix1];
+                int localMean = (int) (s / area);
                 int val = g[y * w + x];
                 int v = (val <= localMean) ? 0 : 255;
                 outPixels[y * w + x] = (0xFF << 24) | (v << 16) | (v << 8) | v;
@@ -369,34 +396,49 @@ public class Main extends JFrame {
         return out;
     }
 
-    // Sauvola threshold: локальный порог с учётом std
-    private static BufferedImage sauvolaThreshold(BufferedImage src, int k, double ksau, double R) {
+    private static BufferedImage sauvolaThresholdIntegral(BufferedImage src, int k, double ksau, double R) {
         BufferedImage gray = toGrayscale(src);
         int w = gray.getWidth(), h = gray.getHeight();
-        int r = k / 2;
         int[] g = new int[w * h];
         gray.getRaster().getPixels(0, 0, w, h, g);
 
+        // интегралы: sum и sumSq
+        double[][] sum = new double[h + 1][w + 1];
+        double[][] sumSq = new double[h + 1][w + 1];
+        for (int y = 1; y <= h; y++) {
+            double rowSum = 0;
+            double rowSumSq = 0;
+            for (int x = 1; x <= w; x++) {
+                int val = g[(y - 1) * w + (x - 1)];
+                rowSum += val;
+                rowSumSq += (double) val * val;
+                sum[y][x] = sum[y - 1][x] + rowSum;
+                sumSq[y][x] = sumSq[y - 1][x] + rowSumSq;
+            }
+        }
+
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         int[] outPixels = new int[w * h];
+        int r = k / 2;
 
         for (int y = 0; y < h; y++) {
+            int y1 = Math.max(0, y - r);
+            int y2 = Math.min(h - 1, y + r);
             for (int x = 0; x < w; x++) {
-                double sum = 0;
-                double sumSq = 0;
-                int cnt = 0;
-                for (int yy = Math.max(0, y - r); yy <= Math.min(h - 1, y + r); yy++) {
-                    for (int xx = Math.max(0, x - r); xx <= Math.min(w - 1, x + r); xx++) {
-                        int val = g[yy * w + xx];
-                        sum += val;
-                        sumSq += val * val;
-                        cnt++;
-                    }
-                }
-                double mean = sum / Math.max(1, cnt);
-                double var = sumSq / Math.max(1, cnt) - mean * mean;
+                int x1 = Math.max(0, x - r);
+                int x2 = Math.min(w - 1, x + r);
+                int ix1 = x1;
+                int iy1 = y1;
+                int ix2 = x2 + 1;
+                int iy2 = y2 + 1;
+                int area = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+                double s = sum[iy2][ix2] - sum[iy1][ix2] - sum[iy2][ix1] + sum[iy1][ix1];
+                double s2 = sumSq[iy2][ix2] - sumSq[iy1][ix2] - sumSq[iy2][ix1] + sumSq[iy1][ix1];
+                double mean = s / area;
+                double var = s2 / area - mean * mean;
                 double std = var > 0 ? Math.sqrt(var) : 0;
-                double T = mean * (1 + ksau * (std / R - 1));
+                double T = mean * (1.0 + ksau * (std / R - 1.0));
                 int val = g[y * w + x];
                 int v = (val <= T) ? 0 : 255;
                 outPixels[y * w + x] = (0xFF << 24) | (v << 16) | (v << 8) | v;

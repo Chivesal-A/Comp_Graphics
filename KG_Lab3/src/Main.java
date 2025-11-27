@@ -64,7 +64,7 @@ class LabFrame extends JFrame {
         gridBox = new JCheckBox("Показывать сетку", true);
         axesBox = new JCheckBox("Показывать оси", true);
         animateBox = new JCheckBox("Анимация");
-        left.add(gridBox); left.add(axesBox); left.add(animateBox);
+        left.add(gridBox); left.add(axesBox); //left.add(animateBox);
 
         left.add(Box.createRigidArea(new Dimension(0,6)));
         left.add(new JLabel("Масштаб (пикселей на единицу):"));

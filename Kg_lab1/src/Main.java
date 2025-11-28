@@ -301,7 +301,7 @@ public class Main extends JFrame {
         if (updating) return;
         updating = true;
         try {
-            // Обновим CMYK-ползунки и текстовые поля — пользователь их как раз поменял
+            // Обновим CMYK-ползунки и текстовые поля
             sliderC.setValue((int) Math.round(c));
             sliderM.setValue((int) Math.round(m));
             sliderY.setValue((int) Math.round(y));

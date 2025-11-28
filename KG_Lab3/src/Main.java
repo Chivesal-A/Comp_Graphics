@@ -277,41 +277,45 @@ class DrawPanel extends JPanel {
 
     private List<Point> stepAlgorithm(int x0, int y0, int x1, int y1, JTextArea log) {
         List<Point> res = new ArrayList<>();
+
         int dx = x1 - x0;
         int dy = y1 - y0;
 
-        if (dx == 0 && dy != 0) {
-            int step = dy > 0 ? 1 : -1;
-            for (int y = y0; y != y1 + step; y += step) res.add(new Point(x0, y));
-            log.append("Пошаговый: вертикальная линия, x = " + x0 + "\n");
-            return res;
-        }
-        if (dx == 0 && dy == 0) {
-            res.add(new Point(x0, y0));
-            log.append("Пошаговый: одна точка (" + x0 + "," + y0 + ")\n");
-            return res;
-        }
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            int step = dx > 0 ? 1 : -1;
+            double k = (double) dy / dx;
+            double b = y0 - k * x0;
 
-        int steps = Math.max(Math.abs(dx), Math.abs(dy));
-        double sx = (double) dx / steps;
-        double sy = (double) dy / steps;
-        double x = x0;
-        double y = y0;
+            log.append("Пошаговый: шаг по X\n");
+            log.append(String.format("dx=%d dy=%d k=%.4f b=%.4f\n", dx, dy, k, b));
 
-        log.append(String.format("Пошаговый (fixed): dx=%d, dy=%d, steps=%d, sx=%.6f, sy=%.6f\n", dx, dy, steps, sx, sy));
-
-        for (int i = 0; i <= steps; i++) {
-            int xi = (int) Math.round(x);
-            int yi = (int) Math.round(y);
-            if (res.isEmpty() || res.get(res.size() - 1).x != xi || res.get(res.size() - 1).y != yi) {
-                res.add(new Point(xi, yi));
-                if (res.size() <= 10) log.append(String.format("i=%d: x=%.4f y=%.4f -> (%d,%d)\n", i, x, y, xi, yi));
+            for (int x = x0; x != x1 + step; x += step) {
+                int y = (int) Math.round(k * x + b);
+                res.add(new Point(x, y));
+                if (res.size() <= 12)
+                    log.append(String.format("x=%d → y=%.4f → y_round=%d\n", x, (k * x + b), y));
             }
-            x += sx;
-            y += sy;
         }
+
+        else {
+            int step = dy > 0 ? 1 : -1;
+            double k_inv = (double) dx / dy;
+            double b_inv = x0 - k_inv * y0;
+
+            log.append("Пошаговый: шаг по Y\n");
+            log.append(String.format("dx=%d dy=%d k_inv=%.4f b_inv=%.4f\n", dx, dy, k_inv, b_inv));
+
+            for (int y = y0; y != y1 + step; y += step) {
+                int x = (int) Math.round(k_inv * y + b_inv);
+                res.add(new Point(x, y));
+                if (res.size() <= 12)
+                    log.append(String.format("y=%d → x=%.4f → x_round=%d\n", y, (k_inv * y + b_inv), x));
+            }
+        }
+
         return res;
     }
+
 
     private List<Point> ddaAlgorithm(int x0,int y0,int x1,int y1, JTextArea log) {
         List<Point> res = new ArrayList<>();
